@@ -36,7 +36,7 @@ uses
   DUnitX.TestFrameWork,
   DUnitX.Extensibility,
   DUnitX.InternalInterfaces,
-  StdCtrls;
+  StdCtrls, Generics.Collections, System.Actions;
 
 const
   WM_LOAD_TESTS = WM_USER + 123;
@@ -58,14 +58,21 @@ type
     RunImages: TImageList;
     Panel1: TPanel;
     TestTree: TTreeView;
-    ToolButton1: TToolButton;
+    btnRunAll: TToolButton;
+    FailList: TListView;
     procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+    procedure actRunAllExecute(Sender: TObject);
+    procedure TestTreeCreateNodeClass(Sender: TCustomTreeView;
+      var NodeClass: TTreeNodeClass);
   private
     { Private declarations }
     FRunner : ITestRunner;
     FFixtureList : ITestFixtureList;
     FApplicationName : string;
+    FFailedTests: TDictionary<String, ITestResult>;
     procedure BuildTree(parentNode: TTreeNode; const fixtureList: ITestFixtureList);
+    function GetNode(FullName: String): TTreeNode;
   protected
 
     procedure OnBeginTest(const threadId: Cardinal; const Test: ITestInfo);
@@ -106,12 +113,49 @@ implementation
 
 {$R *.dfm}
 
+
+type
+  TTestNode = class(TTreeNode)
+  strict private
+    FFullName: String;
+  public
+    constructor Create(Owner: TTreeView; Text: String; TestFullName: String); reintroduce;
+    destructor Destroy; override;
+    property FullName: String read FFullName write FFullName;
+    procedure SetResultType(resultType: TTestResultType);
+    procedure Reload;
+  end;
+
+
 procedure TDUnitXGuiLoggerForm.FormCreate(Sender: TObject);
 begin
+  FFailedTests := TDictionary<String, ITestResult>.Create;
   FRunner := TDUnitX.CreateRunner;
   FRunner.AddLogger(Self);
   FApplicationName := ExtractFileName(ParamStr(0));
   Self.Caption := Format('DUnitX - [%s]',[FApplicationName]);
+end;
+
+procedure TDUnitXGuiLoggerForm.FormDestroy(Sender: TObject);
+begin
+  FFailedTests.Free;
+end;
+
+
+function TDUnitXGuiLoggerForm.GetNode(FullName: String): TTreeNode;
+var
+  i: Integer;
+  t : TTestNode;
+begin
+  Result := nil;
+  i := 0;
+  repeat begin
+    t := TestTree.Items[i] as TTestNode;
+    if t.FullName = FullName then
+      Result := TestTree.Items[i];
+    Inc(i);
+  end
+  until Assigned(Result) or (i >= TestTree.Items.Count);
 end;
 
 procedure TDUnitXGuiLoggerForm.Loaded;
@@ -146,8 +190,25 @@ begin
 end;
 
 procedure TDUnitXGuiLoggerForm.OnEndTest(const threadId: Cardinal; const Test: ITestResult);
+var
+  failItem: TListItem;
+  testNode: TTestNode;
 begin
+  if (Test.ResultType = TTestResultType.Failure)
+    or (Test.ResultType = TTestResultType.Error)
+    or (Test.ResultType = TTestResultType.MemoryLeak) then begin
+    FFailedTests.Add(Test.Test.FullName, Test);
+    failItem := FailList.Items.Add;
+    failItem.Caption := Test.Test.Name;
+    failItem.SubItems.Text := Test.Test.FullName;
+  end;
 
+  testNode := GetNode(Test.Test.FullName) as TTestNode;
+
+  if Assigned(testNode) then begin
+    testNode.SetResultType(Test.ResultType);
+  end;
+  self.TestTree.Repaint;
 end;
 
 procedure TDUnitXGuiLoggerForm.OnEndTestFixture(const threadId: Cardinal; const results: IFixtureResult);
@@ -226,20 +287,33 @@ begin
 end;
 
 
+procedure TDUnitXGuiLoggerForm.TestTreeCreateNodeClass(Sender: TCustomTreeView;
+  var NodeClass: TTreeNodeClass);
+begin
+  NodeClass := TTestNode;
+end;
+
+procedure TDUnitXGuiLoggerForm.actRunAllExecute(Sender: TObject);
+begin
+  FRunner.Execute;
+end;
+
 procedure TDUnitXGuiLoggerForm.BuildTree(parentNode : TTreeNode; const fixtureList : ITestFixtureList);
 var
   fixture : ITestFixture;
   test : ITest;
-  fixtureNode : TTreeNode;
+  fixtureNode, testNode : TTestNode;
 begin
   for fixture in fixtureList do
   begin
-    fixtureNode := TestTree.Items.AddChild(parentNode,fixture.Name);
+    fixtureNode := TestTree.Items.AddChild(parentNode,fixture.Name) as TTestNode;
+    fixtureNode.FullName := fixture.FullName;
     if fixture.HasChildFixtures then
       BuildTree(fixtureNode,fixture.Children);
     for test in fixture.Tests do
     begin
-      TestTree.Items.AddChild(fixtureNode,test.Name);
+      testNode := TestTree.Items.AddChild(fixtureNode,test.Name) as TTestNode;
+      testNode.FullName := test.Fixture.FullName + '.' + test.Name;
     end;
   end;
 end;
@@ -263,6 +337,60 @@ begin
 
 
 
+end;
+
+{ TTestNode }
+
+constructor TTestNode.Create(Owner: TTreeView; Text, TestFullName: String);
+begin
+  inherited Create(Owner.Items);
+  Self.Text := Text;
+  FFullName := TestFullName;
+  ImageIndex := 0;
+end;
+
+destructor TTestNode.Destroy;
+begin
+  inherited;
+end;
+
+procedure TTestNode.Reload;
+begin
+end;
+
+type
+  TTestImage = (
+    Unknown=0,
+    MemoryLeak=1,
+    Pass=2,
+    Ignore=3,
+    Fail=4,
+    Error=5
+    );
+
+
+procedure TTestNode.SetResultType(resultType: TTestResultType);
+begin
+ case resultType of
+   TTestResultType.Pass: begin
+     ImageIndex := Ord(TTestImage.Pass);
+   end;
+   TTestResultType.Failure: begin
+     ImageIndex := Ord(TTestImage.Fail);
+     self.Parent.ImageIndex := Ord(TTestImage.Fail);
+   end;
+   TTestResultType.Error: begin
+     ImageIndex := Ord(TTestImage.Error);
+     self.Parent.ImageIndex := Ord(TTestImage.Fail);
+   end;
+   TTestResultType.Ignored: begin
+     ImageIndex := Ord(TTestImage.Ignore);
+   end;
+   TTestResultType.MemoryLeak: begin
+     ImageIndex := Ord(TTestImage.MemoryLeak);
+   end;
+ end;
+ Application.ProcessMessages;
 end;
 
 end.

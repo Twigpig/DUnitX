@@ -13,11 +13,12 @@ object DUnitXGuiLoggerForm: TDUnitXGuiLoggerForm
   Font.Style = []
   OldCreateOrder = False
   OnCreate = FormCreate
+  OnDestroy = FormDestroy
   PixelsPerInch = 96
   TextHeight = 13
   object Splitter1: TSplitter
     Left = 0
-    Top = 475
+    Top = 387
     Width = 990
     Height = 5
     Cursor = crVSplit
@@ -29,19 +30,24 @@ object DUnitXGuiLoggerForm: TDUnitXGuiLoggerForm
     Left = 0
     Top = 0
     Width = 990
-    Height = 29
-    ButtonWidth = 39
+    Height = 30
+    AutoSize = True
+    ButtonHeight = 30
+    ButtonWidth = 31
     Caption = 'ToolBar1'
+    Images = ActionImages
     TabOrder = 3
-    object ToolButton1: TToolButton
+    Transparent = False
+    object btnRunAll: TToolButton
       Left = 0
       Top = 0
       Action = actRunAll
+      AutoSize = True
     end
   end
   object Panel3: TPanel
     Left = 0
-    Top = 29
+    Top = 30
     Width = 990
     Height = 44
     Align = alTop
@@ -49,6 +55,7 @@ object DUnitXGuiLoggerForm: TDUnitXGuiLoggerForm
     ParentBackground = False
     ParentColor = True
     TabOrder = 1
+    ExplicitTop = 29
     DesignSize = (
       990
       44)
@@ -85,28 +92,39 @@ object DUnitXGuiLoggerForm: TDUnitXGuiLoggerForm
   end
   object Panel4: TPanel
     Left = 0
-    Top = 480
+    Top = 392
     Width = 990
-    Height = 166
+    Height = 254
     Align = alBottom
     BevelOuter = bvNone
     ParentColor = True
     TabOrder = 2
+    object FailList: TListView
+      Left = 0
+      Top = 0
+      Width = 441
+      Height = 254
+      Align = alLeft
+      Columns = <>
+      TabOrder = 0
+    end
   end
   object Panel1: TPanel
     Left = 0
-    Top = 73
+    Top = 74
     Width = 990
-    Height = 402
+    Height = 313
     Align = alClient
     BevelOuter = bvNone
     ParentColor = True
     TabOrder = 4
+    ExplicitTop = 73
+    ExplicitHeight = 314
     object TestTree: TTreeView
       Left = 0
       Top = 0
       Width = 990
-      Height = 402
+      Height = 313
       Hint = 'Hierarchy of test cases. Checked test cases will be run.'
       Align = alClient
       HideSelection = False
@@ -116,6 +134,7 @@ object DUnitXGuiLoggerForm: TDUnitXGuiLoggerForm
       RowSelect = True
       StateImages = StateImages
       TabOrder = 0
+      OnCreateNodeClass = TestTreeCreateNodeClass
       Items.NodeData = {
         03020000002800000000000000000000002080DB4100000000FFFFFFFF000000
         00020000000105540065007300740031002C00000000000000000000002080DB
@@ -169,6 +188,8 @@ object DUnitXGuiLoggerForm: TDUnitXGuiLoggerForm
     end
     object actRunAll: TAction
       Caption = 'Run All'
+      ImageIndex = 0
+      OnExecute = actRunAllExecute
     end
   end
   object ActionImages: TImageList
@@ -483,7 +504,7 @@ object DUnitXGuiLoggerForm: TDUnitXGuiLoggerForm
       000000000000}
   end
   object StateImages: TImageList
-    Left = 534
+    Left = 510
     Top = 92
     Bitmap = {
       494C010104000900040010001000FFFFFFFFFF10FFFFFFFFFFFFFFFF424D3600
